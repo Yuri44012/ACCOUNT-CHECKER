@@ -23,8 +23,13 @@
         <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold w-full md:w-auto">Manual Check</button>
     </form>
 
+    <!-- Progress Bar -->
+    <div class="w-full max-w-3xl bg-purple-900 rounded-full h-6 mb-6">
+        <div id="progressBar" class="bg-purple-500 h-6 rounded-full transition-all duration-500" style="width: 0%;"></div>
+    </div>
+
     <!-- Stats -->
-    <div class="bg-purple-900 p-6 rounded-lg w-full max-w-6xl mb-6 text-white grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+    <div id="stats" class="bg-purple-900 p-6 rounded-lg w-full max-w-6xl mb-6 text-white grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
         <div>
             <p class="text-lg font-bold">Total Checked</p>
             <p class="text-2xl">{{ total }}</p>
@@ -88,21 +93,49 @@
 
     <!-- Scripts -->
     <script>
+    async function refreshStats() {
+        const res = await fetch('/');
+        const html = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const statsDiv = doc.getElementById('stats');
+        document.getElementById('stats').innerHTML = statsDiv.innerHTML;
+
+        const newRows = doc.getElementById('results').innerHTML;
+        document.getElementById('results').innerHTML = newRows;
+    }
+
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const form = new FormData();
-        form.append('file', document.getElementById('file').files[0]);
-        const res = await fetch('/upload', { method: 'POST', body: form });
-        const data = await res.json();
-        location.reload();
+        const file = document.getElementById('file').files[0];
+        if (!file) return;
+
+        const text = await file.text();
+        const lines = text.trim().split("\n").filter(l => l.includes(":"));
+        const total = lines.length;
+        let checked = 0;
+
+        for (const line of lines) {
+            const [email, password] = line.split(":");
+            const form = new FormData();
+            form.append('email', email);
+            form.append('password', password);
+            await fetch('/manual', { method: 'POST', body: form });
+            checked++;
+            document.getElementById('progressBar').style.width = ((checked / total) * 100) + "%";
+            refreshStats();
+        }
+
+        alert('Checking completed!');
     });
 
     document.getElementById('manualForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const form = new FormData(e.target);
-        const res = await fetch('/manual', { method: 'POST', body: form });
-        const data = await res.json();
-        location.reload();
+        await fetch('/manual', { method: 'POST', body: form });
+        document.getElementById('progressBar').style.width = "100%";
+        refreshStats();
+        alert('Manual check completed!');
     });
 
     async function downloadType(type) {
