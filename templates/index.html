@@ -1,0 +1,73 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MLBB Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-purple-400 min-h-screen flex flex-col items-center p-5">
+
+    <h1 class="text-4xl font-bold mb-5">MLBB Account Checker</h1>
+
+    <form id="uploadForm" class="flex flex-col md:flex-row gap-3 mb-6">
+        <input type="file" name="file" id="file" class="bg-purple-800 text-white p-2 rounded">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold">Upload & Check</button>
+    </form>
+
+    <form id="manualForm" class="flex flex-col md:flex-row gap-3 mb-6">
+        <input type="text" name="email" placeholder="Email" class="bg-purple-800 text-white p-2 rounded">
+        <input type="password" name="password" placeholder="Password" class="bg-purple-800 text-white p-2 rounded">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold">Manual Check</button>
+    </form>
+
+    <div class="bg-purple-900 p-4 rounded-lg w-full max-w-6xl mb-4 text-white">
+        <p><strong>Total Checked:</strong> {{ total }}</p>
+        <p><strong>Working:</strong> {{ working }}</p>
+        <p><strong>Invalid:</strong> {{ invalid }}</p>
+    </div>
+
+    <table class="w-full max-w-6xl text-center bg-purple-900 rounded-lg overflow-hidden">
+        <thead class="bg-purple-700 text-white">
+            <tr>
+                <th class="p-2">Email</th>
+                <th class="p-2">Password</th>
+                <th class="p-2">Skins</th>
+                <th class="p-2">Rank</th>
+                <th class="p-2">Bindings</th>
+            </tr>
+        </thead>
+        <tbody id="results" class="bg-purple-800 text-white">
+            {% for acc in valid_accounts %}
+            <tr class="border-t border-purple-700">
+                <td class="p-2">{{ acc.email }}</td>
+                <td class="p-2">{{ acc.password }}</td>
+                <td class="p-2">{{ acc.skins }}</td>
+                <td class="p-2">{{ acc.rank }}</td>
+                <td class="p-2">{{ acc.bindings }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = new FormData();
+        form.append('file', document.getElementById('file').files[0]);
+        const res = await fetch('/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        location.reload();
+    });
+
+    document.getElementById('manualForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        const res = await fetch('/manual', { method: 'POST', body: form });
+        const data = await res.json();
+        location.reload();
+    });
+    </script>
+
+</body>
+</html>
