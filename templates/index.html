@@ -24,8 +24,11 @@
     </form>
 
     <!-- Progress Bar -->
-    <div class="w-full max-w-3xl bg-purple-900 rounded-full h-6 mb-6">
-        <div id="progressBar" class="bg-purple-500 h-6 rounded-full transition-all duration-500" style="width: 0%;"></div>
+    <div class="w-full max-w-3xl mb-2">
+        <div class="bg-purple-900 rounded-full h-6 overflow-hidden">
+            <div id="progressBar" class="bg-purple-500 h-6 transition-all duration-500" style="width: 0%;"></div>
+        </div>
+        <p id="etaText" class="text-center text-sm mt-2"></p>
     </div>
 
     <!-- Stats -->
@@ -114,18 +117,35 @@
         const lines = text.trim().split("\n").filter(l => l.includes(":"));
         const total = lines.length;
         let checked = 0;
+        const batchSize = 10;
+        const startTime = Date.now();
 
-        for (const line of lines) {
-            const [email, password] = line.split(":");
-            const form = new FormData();
-            form.append('email', email);
-            form.append('password', password);
-            await fetch('/manual', { method: 'POST', body: form });
-            checked++;
-            document.getElementById('progressBar').style.width = ((checked / total) * 100) + "%";
+        for (let i = 0; i < lines.length; i += batchSize) {
+            const batch = lines.slice(i, i + batchSize);
+            await Promise.all(batch.map(async line => {
+                const [email, password] = line.split(":");
+                const form = new FormData();
+                form.append('email', email.trim());
+                form.append('password', password.trim());
+                await fetch('/manual', { method: 'POST', body: form });
+            }));
+
+            checked += batch.length;
+            const percent = (checked / total) * 100;
+            document.getElementById('progressBar').style.width = percent + "%";
+
+            const elapsed = (Date.now() - startTime) / 1000; // seconds
+            const speed = checked / elapsed; // accounts per second
+            const remaining = total - checked;
+            const etaSeconds = remaining / (speed || 1);
+
+            document.getElementById('etaText').innerText = `ETA: ${Math.max(0, Math.round(etaSeconds))}s remaining`;
+
             refreshStats();
         }
 
+        document.getElementById('progressBar').style.width = "100%";
+        document.getElementById('etaText').innerText = "Completed!";
         alert('Checking completed!');
     });
 
@@ -134,6 +154,7 @@
         const form = new FormData(e.target);
         await fetch('/manual', { method: 'POST', body: form });
         document.getElementById('progressBar').style.width = "100%";
+        document.getElementById('etaText').innerText = "Completed!";
         refreshStats();
         alert('Manual check completed!');
     });
