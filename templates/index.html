@@ -8,48 +8,85 @@
 </head>
 <body class="bg-black text-purple-400 min-h-screen flex flex-col items-center p-5">
 
-    <h1 class="text-4xl font-bold mb-5">MLBB Account Checker</h1>
+    <h1 class="text-4xl font-bold mb-8">MLBB Account Checker</h1>
 
-    <form id="uploadForm" class="flex flex-col md:flex-row gap-3 mb-6">
-        <input type="file" name="file" id="file" class="bg-purple-800 text-white p-2 rounded">
-        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold">Upload & Check</button>
+    <!-- Upload Form -->
+    <form id="uploadForm" class="flex flex-col md:flex-row gap-3 mb-6 w-full max-w-3xl">
+        <input type="file" name="file" id="file" class="bg-purple-800 text-white p-2 rounded flex-1">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold w-full md:w-auto">Upload & Check</button>
     </form>
 
-    <form id="manualForm" class="flex flex-col md:flex-row gap-3 mb-6">
-        <input type="text" name="email" placeholder="Email" class="bg-purple-800 text-white p-2 rounded">
-        <input type="password" name="password" placeholder="Password" class="bg-purple-800 text-white p-2 rounded">
-        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold">Manual Check</button>
+    <!-- Manual Check Form -->
+    <form id="manualForm" class="flex flex-col md:flex-row gap-3 mb-6 w-full max-w-3xl">
+        <input type="text" name="email" placeholder="Email" class="bg-purple-800 text-white p-2 rounded flex-1">
+        <input type="password" name="password" placeholder="Password" class="bg-purple-800 text-white p-2 rounded flex-1">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold w-full md:w-auto">Manual Check</button>
     </form>
 
-    <div class="bg-purple-900 p-4 rounded-lg w-full max-w-6xl mb-4 text-white">
-        <p><strong>Total Checked:</strong> {{ total }}</p>
-        <p><strong>Working:</strong> {{ working }}</p>
-        <p><strong>Invalid:</strong> {{ invalid }}</p>
+    <!-- Stats -->
+    <div class="bg-purple-900 p-6 rounded-lg w-full max-w-6xl mb-6 text-white grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div>
+            <p class="text-lg font-bold">Total Checked</p>
+            <p class="text-2xl">{{ total }}</p>
+        </div>
+        <div>
+            <p class="text-lg font-bold">Working</p>
+            <p class="text-2xl text-green-400">{{ working }}</p>
+        </div>
+        <div>
+            <p class="text-lg font-bold">Invalid</p>
+            <p class="text-2xl text-red-400">{{ invalid }}</p>
+        </div>
+        <div>
+            <p class="text-lg font-bold">2FA Required</p>
+            <p class="text-2xl text-yellow-400">{{ twofa }}</p>
+        </div>
+        <div>
+            <p class="text-lg font-bold">Locked/Banned</p>
+            <p class="text-2xl text-pink-400">{{ locked }}</p>
+        </div>
     </div>
 
-    <table class="w-full max-w-6xl text-center bg-purple-900 rounded-lg overflow-hidden">
-        <thead class="bg-purple-700 text-white">
-            <tr>
-                <th class="p-2">Email</th>
-                <th class="p-2">Password</th>
-                <th class="p-2">Skins</th>
-                <th class="p-2">Rank</th>
-                <th class="p-2">Bindings</th>
-            </tr>
-        </thead>
-        <tbody id="results" class="bg-purple-800 text-white">
-            {% for acc in valid_accounts %}
-            <tr class="border-t border-purple-700">
-                <td class="p-2">{{ acc.email }}</td>
-                <td class="p-2">{{ acc.password }}</td>
-                <td class="p-2">{{ acc.skins }}</td>
-                <td class="p-2">{{ acc.rank }}</td>
-                <td class="p-2">{{ acc.bindings }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Valid Accounts Table -->
+    <div class="w-full max-w-6xl overflow-x-auto mb-8">
+        <table class="min-w-full bg-purple-900 rounded-lg overflow-hidden">
+            <thead class="bg-purple-700 text-white">
+                <tr>
+                    <th class="p-3">Email</th>
+                    <th class="p-3">Password</th>
+                    <th class="p-3">Skins</th>
+                    <th class="p-3">Rank</th>
+                    <th class="p-3">Bindings</th>
+                </tr>
+            </thead>
+            <tbody id="results" class="bg-purple-800 text-white">
+                {% for acc in valid_accounts %}
+                <tr class="border-t border-purple-700 hover:bg-purple-700 transition">
+                    <td class="p-2">{{ acc.email }}</td>
+                    <td class="p-2">{{ acc.password }}</td>
+                    <td class="p-2">{{ acc.skins }}</td>
+                    <td class="p-2">{{ acc.rank }}</td>
+                    <td class="p-2">{{ acc.bindings }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
+    <!-- Download Buttons -->
+    <div class="flex flex-col md:flex-row gap-4 mb-10">
+        <button onclick="downloadType('working')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+            Download Working
+        </button>
+        <button onclick="downloadType('2fa')" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded">
+            Download 2FA
+        </button>
+        <button onclick="downloadType('locked')" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded">
+            Download Locked
+        </button>
+    </div>
+
+    <!-- Scripts -->
     <script>
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -67,6 +104,26 @@
         const data = await res.json();
         location.reload();
     });
+
+    async function downloadType(type) {
+        const res = await fetch(`/download?type=${type}`);
+        const data = await res.json();
+
+        let text = '';
+        data.accounts.forEach(acc => {
+            text += `${acc.email}:${acc.password}\n`;
+        });
+
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${type}_accounts.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
     </script>
 
 </body>
