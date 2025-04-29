@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, Form, Request
+from fastapi import FastAPI, UploadFile, Form, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -24,7 +24,6 @@ results = {
 with open("proxies.txt", "r") as f:
     proxies = [p.strip() for p in f if p.strip()]
 
-# Proxy formatter
 def get_proxy_url():
     raw = random.choice(proxies)
     ip, port, user, pwd = raw.split(":")
@@ -142,12 +141,12 @@ async def manual(email: str = Form(...), password: str = Form(...)):
     return JSONResponse({"status": status, **results})
 
 @app.get("/download")
-async def download(type: str = "working"):
+async def download(type: str = Query("working")):
     if type == "working":
-        return JSONResponse({"working": results["valid_accounts"]})
+        return JSONResponse({"accounts": results["valid_accounts"]})
     elif type == "2fa":
-        return JSONResponse({"2fa_required": results["2fa_accounts"]})
+        return JSONResponse({"accounts": results["2fa_accounts"]})
     elif type == "locked":
-        return JSONResponse({"locked": results["locked_accounts"]})
+        return JSONResponse({"accounts": results["locked_accounts"]})
     else:
-        return JSONResponse({"error": "Invalid type. Use working, 2fa, or locked."})
+        return JSONResponse({"accounts": []})
